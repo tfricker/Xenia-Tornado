@@ -121,8 +121,9 @@ Play with some graphs.
 Ohio.df = Torn.sf %>%
   filter(st == "OH")
 
-ggplot(Ohio.df, aes(y = ED)) +
-  geom_density()
+ggplot(Ohio.df, aes(x = ED, y = cas)) +
+  geom_point() + 
+  scale_x_log10() + scale_y_log10()
 
 ```
 
