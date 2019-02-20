@@ -3,6 +3,8 @@ title: "Xenia Tornado"
 author: "Tyler Fricker"
 date: "2/19/2019"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 Set working directory and load packages.
@@ -16,6 +18,7 @@ library(rgeos)
 library(rgdal)
 library(areal)
 library(tidycensus)
+library(scales)
 ```
 
 ### Data and Methods
@@ -93,9 +96,26 @@ Torn.sf <- Torn.sf %>%
   mutate(ED = EW3 * AreaPath)
 ```
 
+Add tornado paths by buffering tornado tracks by associated widths.
+
+To perform geocomputions we need to set coordinate reference system. Here it is geographic. We transform the geographic coordinate reference system to a specific Lambert conic conformal projection.
+```{r}
+Torn.sf <- st_transform(Torn.sf, 
+                     crs = "+proj=lcc +lat_1=60 +lat_2=30 +lon_0=-90 +units=m")
+```
+
+Buffer the geometries.
+```{r}
+TornB.sf <- st_buffer(Torn.sf, 
+                   dist = Torn.sf$Width/2,
+                   endCapStyle = 'ROUND')
+```
+
+
+                   
 Isolate the Xenia, OH tornado of April 3, 1974
 ```{r}
-Xenia.df = Torn.sf %>%
+Xenia.df = TornB.sf %>%
   filter(st == "OH") %>%
   filter(mag == 5) %>%
   filter(date == "1974-04-03")
@@ -108,9 +128,9 @@ print(Xenia.df$cas)
 
 Compare with historical record. How strong was the Xenia tornado.
 ```{r}
-(length(Torn.sf$ED[Torn.sf$ED >= 2.819194e+12])/nrow(Torn.sf)) * 100
+(length(TornB.sf$ED[TornB.sf$ED >= 2.819194e+12])/nrow(TornB.sf)) * 100
 
-(length(Torn.sf$ED[Torn.sf$cas >= 1186])/nrow(Torn.sf)) * 100
+(length(TornB.sf$ED[TornB.sf$cas >= 1186])/nrow(TornB.sf)) * 100
 
 ```
 
@@ -118,13 +138,44 @@ The Xenia tornado is in the 99th percentile for tornado energy (99.39%) and amon
 
 Play with some graphs.
 ```{r}
-Ohio.df = Torn.sf %>%
+Ohio.df = TornB.sf %>%
   filter(st == "OH")
 
-ggplot(Ohio.df, aes(x = ED, y = cas)) +
+ggplot(Ohio.df[Ohio.df$cas >0,], aes(x = ED, y = cas)) +
   geom_point() + 
-  scale_x_log10() + scale_y_log10()
+  scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                     labels = trans_format("log10", math_format(10^.x))) +
+  scale_y_log10() +
+  xlab("Energy Dissipation [W]") +
+  ylab("Number of Casualties") + 
+  geom_label(label = "Xenia", 
+             data = Ohio.df[Ohio.df$om == 116 & Ohio.df$Year == 1974,],
+             hjust = 1.15) +
+  theme_minimal()
 
+```
+
+Create a map
+```{r}
+sts <- state.name[state.name == "Ohio"]
+stateBorders <- us_states(states = sts)
+
+df = Ohio.df[Ohio.df$cas > 0,]
+
+Xenia.df$name = "Xenia"
+
+tm_shape(stateBorders, projection ="+init=epsg:4326") +
+  tm_borders() +
+  tm_fill(col = "grey94") +
+  tm_shape(df) +
+  tm_bubbles(col = "#fd8d3c", size = "cas", sizes.legend = c(50, 250, 500, 750, 1200), scale = 3, title.size="Casualties", alpha = 0.9) +
+  tm_shape(Xenia.df) +
+  tm_text(text = "name", xmod = 2.95, fontface = "bold", size = 1.5) + 
+  tm_format('World', legend.position = c("RIGHT", "BOTTOM"),
+                   attr.position = c("right", "bottom"),
+                  legend.frame = FALSE) +
+  tm_layout(frame = FALSE, attr.outside=TRUE)
+```
 ```
 
 
