@@ -178,6 +178,4 @@ tm_shape(stateBorders, projection ="+init=epsg:4326") +
 ```
 ```
 
-Does this get updated to github?
-
 
